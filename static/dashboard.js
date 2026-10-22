@@ -1402,14 +1402,47 @@ import { sortPayments } from "./sort.js";
 
   // ── Version ───────────────────────────────────────────────────────────────
 
+  var loadedVersion = null;
+
+  function versionFrom(text) {
+    var match = /v\d+\.\d+\.\d+/.exec(text);
+    return match ? match[0] : null;
+  }
+
+  function showReloadBanner() {
+    var banner = $("version-banner");
+    if (banner) banner.hidden = false;
+  }
+
   function loadVersion() {
     fetch("/")
       .then(function (res) { return res.text(); })
       .then(function (text) {
-        var match = /v\d+\.\d+\.\d+/.exec(text);
-        if (match) $("version").textContent = match[0];
+        var version = versionFrom(text);
+        if (!version || loadedVersion) return;
+        loadedVersion = version;
+        var node = $("version");
+        if (node) node.textContent = version;
       })
       .catch(function () { /* cosmetic only */ });
+  }
+
+  /* Compare the version served by / with the one captured at start. */
+  function checkDeployedVersion() {
+    fetch("/")
+      .then(function (res) { return res.text(); })
+      .then(function (text) {
+        var version = versionFrom(text);
+        if (!version) return;
+        if (!loadedVersion) {
+          loadedVersion = version;
+          var node = $("version");
+          if (node) node.textContent = version;
+          return;
+        }
+        if (version !== loadedVersion) showReloadBanner();
+      })
+      .catch(function () { /* health poll still owns the pill */ });
   }
 
   // ── Health ────────────────────────────────────────────────────────────────
@@ -1598,6 +1631,11 @@ import { sortPayments } from "./sort.js";
 
     $("sign-out").addEventListener("click", function () { signOut(null); });
 
+    var versionReload = $("version-reload");
+    if (versionReload) {
+      versionReload.addEventListener("click", function () { window.location.reload(); });
+    }
+
     $("refresh").addEventListener("click", function () { loadSummary(); reload(); });
 
     $("export-csv").addEventListener("click", function () {
@@ -1719,7 +1757,7 @@ import { sortPayments } from "./sort.js";
     });
 
     window.setInterval(function () {
-      if (store.get().key) pollHealth();
+      if (store.get().key) { pollHealth(); checkDeployedVersion(); }
     }, 30000);
 
     window.setInterval(function () {

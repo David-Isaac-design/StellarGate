@@ -837,6 +837,33 @@ kbd {
   background: var(--idle-bg);
 }
 
+/* Reload prompt shown when a health poll detects a newer deployed version
+   (#811). Sits above the topbar so it is visible without scrolling. */
+.version-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0.5rem 1rem;
+  color: var(--warn);
+  background: var(--warn-bg);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.version-banner button {
+  font: inherit;
+  font-weight: 700;
+  color: inherit;
+  background: none;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 0.15rem 0.7rem;
+  cursor: pointer;
+}
+
 /* ── Asset and webhook-status columns (#773) ────────────────────────────────
  *
  * The asset code is short and monospaced so a column of them lines up; the
