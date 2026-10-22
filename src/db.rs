@@ -1694,7 +1694,7 @@ mod tests {
         let (raw2, prefix2) = generate_api_key();
         create_api_key(&pool, "m1", &raw2, &prefix2, None)
             .await
-            .unwrap();
+            .expect("creating a second API key for the merchant should succeed");
 
         assert_eq!(
             find_merchant_by_key(&pool, &raw).await.unwrap(),
@@ -1702,14 +1702,18 @@ mod tests {
         );
 
         assert_eq!(
-            revoke_api_key(&pool, "m1", &key_id).await.unwrap(),
+            revoke_api_key(&pool, "m1", &key_id)
+                .await
+                .expect("revoking an active key should succeed"),
             RevokeKeyOutcome::Revoked
         );
         assert_eq!(find_merchant_by_key(&pool, &raw).await.unwrap(), None);
 
         // Revoking again reports that nothing was revoked.
         assert_eq!(
-            revoke_api_key(&pool, "m1", &key_id).await.unwrap(),
+            revoke_api_key(&pool, "m1", &key_id)
+                .await
+                .expect("revoke_api_key should succeed for an existing key"),
             RevokeKeyOutcome::NotFound
         );
     }
@@ -1747,12 +1751,12 @@ mod tests {
         // A one-hour TTL lands the expiry strictly in the future...
         let live = create_payment(&pool, new_payment("a", "MEMOA", 3600))
             .await
-            .unwrap();
+            .expect("creating a payment with a positive TTL should succeed");
         assert!(live.expires_at > live.created_at);
         // ...while a negative TTL produces an already-overdue expiry.
         let dead = create_payment(&pool, new_payment("b", "MEMOB", -10))
             .await
-            .unwrap();
+            .expect("creating a payment with a negative TTL should succeed");
         assert!(dead.expires_at < dead.created_at);
     }
 
