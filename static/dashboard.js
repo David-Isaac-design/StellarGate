@@ -268,6 +268,8 @@ import { sortPayments } from "./sort.js";
     if (size) size.value = String(p.pageSize);
     var auto = $("prefs-auto-refresh");
     if (auto) auto.checked = !!p.autoRefresh;
+    var interval = $("settings-refresh-interval");
+    if (interval) interval.value = String(p.refreshIntervalSec);
     var theme = $("prefs-theme");
     if (theme) theme.value = p.theme || "system";
     var tz = $("prefs-timezone");
@@ -409,6 +411,14 @@ import { sortPayments } from "./sort.js";
       });
     }
 
+    var interval = $("settings-refresh-interval");
+    if (interval) {
+      interval.addEventListener("change", function () {
+        prefs.update({ refreshIntervalSec: Number(interval.value) || 30 });
+        restartAutoRefreshTimer();
+      });
+    }
+
     var theme = $("prefs-theme");
     if (theme) {
       theme.addEventListener("change", function () {
@@ -512,6 +522,19 @@ import { sortPayments } from "./sort.js";
   // ── Payments list ──────────────────────────────────────────────────────────
 
   var reloadPending = false;
+  var autoRefreshTimer = null;
+
+  /** (Re)start the payment-list auto-refresh timer at the configured interval (#813). */
+  function restartAutoRefreshTimer() {
+    if (autoRefreshTimer !== null) window.clearInterval(autoRefreshTimer);
+    var intervalMs = (prefs.get().refreshIntervalSec || 30) * 1000;
+    autoRefreshTimer = window.setInterval(function () {
+      var stateSnap = store.get();
+      if (stateSnap.key && stateSnap.autoRefresh && (!stateSnap.status || stateSnap.status === "pending")) {
+        reload();
+      }
+    }, intervalMs);
+  }
 
   function reload() {
     store.resetPaging();
@@ -537,6 +560,8 @@ import { sortPayments } from "./sort.js";
     api(buildListQuery(state))
       .then(function (body) {
         clearSkeletonRows();
+        var stamp = $("last-updated");
+        if (stamp) stamp.textContent = "Last updated " + fmtTime(new Date().toISOString());
         var payments = body.payments || [];
         var rows = store.get().loadedPayments.concat(payments);
         store.update({ loadedPayments: rows });
@@ -1772,12 +1797,7 @@ import { sortPayments } from "./sort.js";
       if (store.get().key) { pollHealth(); checkDeployedVersion(); }
     }, 30000);
 
-    window.setInterval(function () {
-      var stateSnap = store.get();
-      if (stateSnap.key && stateSnap.autoRefresh && (!stateSnap.status || stateSnap.status === "pending")) {
-        reload();
-      }
-    }, 15000);
+    restartAutoRefreshTimer();
 
     initCreatePaymentDialog();
 

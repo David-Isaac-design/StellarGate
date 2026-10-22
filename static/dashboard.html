@@ -156,6 +156,13 @@
           <input id="settings-auto-refresh" type="checkbox" />
           <span>Auto-refresh</span>
         </label>
+        <label for="settings-refresh-interval">Auto-refresh interval</label>
+        <select id="settings-refresh-interval">
+          <option value="10">10s</option>
+          <option value="30">30s</option>
+          <option value="60">60s</option>
+          <option value="300">5m</option>
+        </select>
         <label for="settings-theme">Theme</label>
         <select id="settings-theme">
           <option value="system">System</option>
@@ -312,6 +319,7 @@
           <span id="selection-count" class="muted small" hidden></span>
           <button id="export-selected" class="ghost" hidden>Export selected</button>
           <button id="refresh" class="ghost" data-i18n="list.refresh">Refresh</button>
+          <span id="last-updated" class="muted small"></span>
           <button id="new-payment-btn" class="primary" aria-haspopup="dialog">New payment</button>
           <!-- Column visibility menu. The button is the popover anchor; the
                menu itself is a plain list of checkboxes so it degrades to a
