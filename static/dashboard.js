@@ -524,6 +524,59 @@ import { sortPayments } from "./sort.js";
   var reloadPending = false;
   var autoRefreshTimer = null;
 
+  // ── Payment completion notifications (#814) ───────────────────────────────
+
+  /** Pending payments the merchant opted in to watch, keyed by payment id. */
+  var watchedPayments = {};
+
+  /** The payment currently shown in the open detail drawer, if any. */
+  var currentDetailPayment = null;
+
+  /** Reflect whether `p` is pending and watched into the detail drawer's button. */
+  function syncNotifyButton(p) {
+    var btn = $("detail-notify");
+    if (!btn) return;
+    if (typeof Notification === "undefined" || p.status !== "pending") {
+      show(btn, false);
+      return;
+    }
+    show(btn, true);
+    var watching = !!watchedPayments[p.id];
+    btn.disabled = watching;
+    btn.textContent = watching ? "Watching for completion…" : "Notify me when this completes";
+  }
+
+  /** Opt in to a browser notification for one pending payment (#814). */
+  function watchPaymentForNotification(p) {
+    if (typeof Notification === "undefined") return;
+    function startWatching() {
+      watchedPayments[p.id] = { amount: p.amount, asset: p.asset };
+      syncNotifyButton(p);
+    }
+    if (Notification.permission === "granted") {
+      startWatching();
+    } else if (Notification.permission !== "denied") {
+      Notification.requestPermission().then(function (permission) {
+        if (permission === "granted") startWatching();
+      });
+    }
+  }
+
+  /** Fire a notification for any watched payment whose status just resolved. */
+  function notifyWatchedPayments(payments) {
+    payments.forEach(function (p) {
+      var watched = watchedPayments[p.id];
+      if (!watched) return;
+      if (p.status !== "completed" && p.status !== "underpaid") return;
+      delete watchedPayments[p.id];
+      if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+      var title = p.status === "completed" ? "Payment completed" : "Payment underpaid";
+      new Notification(title, {
+        body: formatAmount(watched.amount, watched.asset) + " · " + shortId(p.id),
+      });
+    });
+  }
+
   /** (Re)start the payment-list auto-refresh timer at the configured interval (#813). */
   function restartAutoRefreshTimer() {
     if (autoRefreshTimer !== null) window.clearInterval(autoRefreshTimer);
@@ -563,6 +616,7 @@ import { sortPayments } from "./sort.js";
         var stamp = $("last-updated");
         if (stamp) stamp.textContent = "Last updated " + fmtTime(new Date().toISOString());
         var payments = body.payments || [];
+        notifyWatchedPayments(payments);
         var rows = store.get().loadedPayments.concat(payments);
         store.update({ loadedPayments: rows });
         renderRows();
@@ -939,6 +993,7 @@ import { sortPayments } from "./sort.js";
     $("payment-invoice").hidden = true;
     clear($("invoice-fields")); clear($("invoice-qr"));
     $("invoice-uri").textContent = "";
+    show($("detail-notify"), false);
     showDetailSkeleton();
     openModal(detail);
     focusDetail();
@@ -947,6 +1002,8 @@ import { sortPayments } from "./sort.js";
       .then(function (p) {
         if (store.get().selectedPaymentId !== id || !detail.open) return;
         renderInvoice(p);
+        currentDetailPayment = p;
+        syncNotifyButton(p);
         clear(fields);
         [
           [t("field.status"), p.status, true],
@@ -1757,6 +1814,12 @@ import { sortPayments } from "./sort.js";
       $("invoice-print").addEventListener("click", function () {
         if (!$("invoice-print").disabled && detail.open) window.print();
       });
+      var notifyBtn = $("detail-notify");
+      if (notifyBtn) {
+        notifyBtn.addEventListener("click", function () {
+          if (currentDetailPayment) watchPaymentForNotification(currentDetailPayment);
+        });
+      }
       $("detail-close").addEventListener("click", closeDetail);
       $("detail").addEventListener("click", dismissOnBackdrop);
       $("detail").addEventListener("keydown", trapDetailFocus);
