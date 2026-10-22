@@ -461,6 +461,9 @@ export const THEMES = ["system", "light", "dark"];
 /** Page sizes offered in the settings dialog. */
 export const PAGE_SIZES = [10, 25, 50, 100];
 
+/** Auto-refresh intervals (seconds) offered in the settings dialog (#813). */
+export const REFRESH_INTERVALS = [10, 30, 60, 300];
+
 /**
  * A table column.
  *
@@ -501,6 +504,7 @@ export function defaultPrefs() {
   return {
     pageSize: 25,
     autoRefresh: false,
+    refreshIntervalSec: 30,
     theme: "system",
     timezone: "local",
     columns: columns,
@@ -511,6 +515,12 @@ export function defaultPrefs() {
 function coercePageSize(value) {
   var n = Number(value);
   return PAGE_SIZES.indexOf(n) >= 0 ? n : defaultPrefs().pageSize;
+}
+
+/** Coerce a stored refresh interval to one of REFRESH_INTERVALS, else the default. */
+function coerceRefreshInterval(value) {
+  var n = Number(value);
+  return REFRESH_INTERVALS.indexOf(n) >= 0 ? n : defaultPrefs().refreshIntervalSec;
 }
 
 /** Coerce a stored theme to one of THEMES, else the default. */
@@ -555,6 +565,7 @@ export function normalizePrefs(raw) {
   return {
     pageSize: coercePageSize(s.pageSize),
     autoRefresh: !!s.autoRefresh,
+    refreshIntervalSec: coerceRefreshInterval(s.refreshIntervalSec),
     theme: coerceTheme(s.theme),
     timezone: coerceTimezone(s.timezone),
     columns: coerceColumns(s.columns),
@@ -607,6 +618,7 @@ export function loadPrefs(storage) {
   var raw = {
     pageSize: readKey(store, "pageSize"),
     autoRefresh: readKey(store, "autoRefresh") === "1",
+    refreshIntervalSec: readKey(store, "refreshIntervalSec"),
     theme: readKey(store, "theme"),
     timezone: readKey(store, "timezone"),
     columns: null,
@@ -635,6 +647,7 @@ export function savePrefs(prefs, storage) {
   if (!store) return normalized;
   writeKey(store, "pageSize", String(normalized.pageSize));
   writeKey(store, "autoRefresh", normalized.autoRefresh ? "1" : "0");
+  writeKey(store, "refreshIntervalSec", String(normalized.refreshIntervalSec));
   writeKey(store, "theme", normalized.theme);
   writeKey(store, "timezone", normalized.timezone);
   writeKey(store, "columns", JSON.stringify(normalized.columns));
@@ -662,7 +675,7 @@ export function resetToDefaults(storage) {
       // Fall through to the known keys below.
     }
     // Remove the known keys even if enumeration failed.
-    ["pageSize", "autoRefresh", "theme", "timezone", "columns"].forEach(function (name) {
+    ["pageSize", "autoRefresh", "refreshIntervalSec", "theme", "timezone", "columns"].forEach(function (name) {
       doomed.push(PREFS_NAMESPACE + name);
     });
     doomed.forEach(function (name) {

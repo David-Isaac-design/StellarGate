@@ -186,6 +186,9 @@ pub fn router(state: Arc<AppState>) -> axum::Router {
         .route("/", get(root))
         .route("/health", get(health))
         .route("/ready", get(ready))
+        /* Public, unauthenticated (issue #812): lets the dashboard tell a
+        testnet gateway apart from a production one without a merchant key. */
+        .route("/network", get(network_info))
         /* Gated behind METRICS_TOKEN (issue #250) — unset by default, which
         denies every request rather than exposing auth/webhook counters
         anonymously. See `require_metrics_token`. */
@@ -284,6 +287,13 @@ pub fn router(state: Arc<AppState>) -> axum::Router {
 /// header absent entirely.
 fn hsts_value(network: &str) -> Option<HeaderValue> {
     (network == "public").then(|| HeaderValue::from_static("max-age=63072000; includeSubDomains"))
+}
+
+/// The configured Stellar network (`"public"` or `"testnet"`), so the
+/// dashboard can show a prominent badge rather than relying on the operator
+/// to remember which gateway they are looking at.
+async fn network_info(State(state): State<Arc<AppState>>) -> Json<Value> {
+    Json(json!({ "network": state.config.network }))
 }
 
 /// The versioned API surface: everything that forms the public contract.

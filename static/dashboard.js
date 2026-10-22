@@ -268,6 +268,8 @@ import { sortPayments } from "./sort.js";
     if (size) size.value = String(p.pageSize);
     var auto = $("prefs-auto-refresh");
     if (auto) auto.checked = !!p.autoRefresh;
+    var interval = $("settings-refresh-interval");
+    if (interval) interval.value = String(p.refreshIntervalSec);
     var theme = $("prefs-theme");
     if (theme) theme.value = p.theme || "system";
     var tz = $("prefs-timezone");
@@ -409,6 +411,14 @@ import { sortPayments } from "./sort.js";
       });
     }
 
+    var interval = $("settings-refresh-interval");
+    if (interval) {
+      interval.addEventListener("change", function () {
+        prefs.update({ refreshIntervalSec: Number(interval.value) || 30 });
+        restartAutoRefreshTimer();
+      });
+    }
+
     var theme = $("prefs-theme");
     if (theme) {
       theme.addEventListener("change", function () {
@@ -502,6 +512,7 @@ import { sortPayments } from "./sort.js";
       setError($("gate-error"), null);
       updateSessionExpiry();
       loadVersion();
+      loadNetworkBadge();
       pollHealth();
       loadSummary();
       reload();
@@ -511,6 +522,72 @@ import { sortPayments } from "./sort.js";
   // ── Payments list ──────────────────────────────────────────────────────────
 
   var reloadPending = false;
+  var autoRefreshTimer = null;
+
+  // ── Payment completion notifications (#814) ───────────────────────────────
+
+  /** Pending payments the merchant opted in to watch, keyed by payment id. */
+  var watchedPayments = {};
+
+  /** The payment currently shown in the open detail drawer, if any. */
+  var currentDetailPayment = null;
+
+  /** Reflect whether `p` is pending and watched into the detail drawer's button. */
+  function syncNotifyButton(p) {
+    var btn = $("detail-notify");
+    if (!btn) return;
+    if (typeof Notification === "undefined" || p.status !== "pending") {
+      show(btn, false);
+      return;
+    }
+    show(btn, true);
+    var watching = !!watchedPayments[p.id];
+    btn.disabled = watching;
+    btn.textContent = watching ? "Watching for completion…" : "Notify me when this completes";
+  }
+
+  /** Opt in to a browser notification for one pending payment (#814). */
+  function watchPaymentForNotification(p) {
+    if (typeof Notification === "undefined") return;
+    function startWatching() {
+      watchedPayments[p.id] = { amount: p.amount, asset: p.asset };
+      syncNotifyButton(p);
+    }
+    if (Notification.permission === "granted") {
+      startWatching();
+    } else if (Notification.permission !== "denied") {
+      Notification.requestPermission().then(function (permission) {
+        if (permission === "granted") startWatching();
+      });
+    }
+  }
+
+  /** Fire a notification for any watched payment whose status just resolved. */
+  function notifyWatchedPayments(payments) {
+    payments.forEach(function (p) {
+      var watched = watchedPayments[p.id];
+      if (!watched) return;
+      if (p.status !== "completed" && p.status !== "underpaid") return;
+      delete watchedPayments[p.id];
+      if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+      var title = p.status === "completed" ? "Payment completed" : "Payment underpaid";
+      new Notification(title, {
+        body: formatAmount(watched.amount, watched.asset) + " · " + shortId(p.id),
+      });
+    });
+  }
+
+  /** (Re)start the payment-list auto-refresh timer at the configured interval (#813). */
+  function restartAutoRefreshTimer() {
+    if (autoRefreshTimer !== null) window.clearInterval(autoRefreshTimer);
+    var intervalMs = (prefs.get().refreshIntervalSec || 30) * 1000;
+    autoRefreshTimer = window.setInterval(function () {
+      var stateSnap = store.get();
+      if (stateSnap.key && stateSnap.autoRefresh && (!stateSnap.status || stateSnap.status === "pending")) {
+        reload();
+      }
+    }, intervalMs);
+  }
 
   function reload() {
     store.resetPaging();
@@ -536,7 +613,10 @@ import { sortPayments } from "./sort.js";
     api(buildListQuery(state))
       .then(function (body) {
         clearSkeletonRows();
+        var stamp = $("last-updated");
+        if (stamp) stamp.textContent = "Last updated " + fmtTime(new Date().toISOString());
         var payments = body.payments || [];
+        notifyWatchedPayments(payments);
         var rows = store.get().loadedPayments.concat(payments);
         store.update({ loadedPayments: rows });
         renderRows();
@@ -913,6 +993,7 @@ import { sortPayments } from "./sort.js";
     $("payment-invoice").hidden = true;
     clear($("invoice-fields")); clear($("invoice-qr"));
     $("invoice-uri").textContent = "";
+    show($("detail-notify"), false);
     showDetailSkeleton();
     openModal(detail);
     focusDetail();
@@ -921,6 +1002,8 @@ import { sortPayments } from "./sort.js";
       .then(function (p) {
         if (store.get().selectedPaymentId !== id || !detail.open) return;
         renderInvoice(p);
+        currentDetailPayment = p;
+        syncNotifyButton(p);
         clear(fields);
         [
           [t("field.status"), p.status, true],
@@ -1402,14 +1485,58 @@ import { sortPayments } from "./sort.js";
 
   // ── Version ───────────────────────────────────────────────────────────────
 
+  var loadedVersion = null;
+
+  function versionFrom(text) {
+    var match = /v\d+\.\d+\.\d+/.exec(text);
+    return match ? match[0] : null;
+  }
+
+  function showReloadBanner() {
+    var banner = $("version-banner");
+    if (banner) banner.hidden = false;
+  }
+
   function loadVersion() {
     fetch("/")
       .then(function (res) { return res.text(); })
       .then(function (text) {
-        var match = /v\d+\.\d+\.\d+/.exec(text);
-        if (match) $("version").textContent = match[0];
+        var version = versionFrom(text);
+        if (!version || loadedVersion) return;
+        loadedVersion = version;
+        var node = $("version");
+        if (node) node.textContent = version;
       })
       .catch(function () { /* cosmetic only */ });
+  }
+
+  /** Show the testnet badge when the gateway isn't on the public network (#812). */
+  function loadNetworkBadge() {
+    fetch("/network")
+      .then(function (res) { return res.json(); })
+      .then(function (body) {
+        var badge = $("network-badge");
+        if (badge) badge.hidden = body.network === "public";
+      })
+      .catch(function () { /* cosmetic only */ });
+  }
+
+  /* Compare the version served by / with the one captured at start. */
+  function checkDeployedVersion() {
+    fetch("/")
+      .then(function (res) { return res.text(); })
+      .then(function (text) {
+        var version = versionFrom(text);
+        if (!version) return;
+        if (!loadedVersion) {
+          loadedVersion = version;
+          var node = $("version");
+          if (node) node.textContent = version;
+          return;
+        }
+        if (version !== loadedVersion) showReloadBanner();
+      })
+      .catch(function () { /* health poll still owns the pill */ });
   }
 
   // ── Health ────────────────────────────────────────────────────────────────
@@ -1598,6 +1725,11 @@ import { sortPayments } from "./sort.js";
 
     $("sign-out").addEventListener("click", function () { signOut(null); });
 
+    var versionReload = $("version-reload");
+    if (versionReload) {
+      versionReload.addEventListener("click", function () { window.location.reload(); });
+    }
+
     $("refresh").addEventListener("click", function () { loadSummary(); reload(); });
 
     $("export-csv").addEventListener("click", function () {
@@ -1682,6 +1814,12 @@ import { sortPayments } from "./sort.js";
       $("invoice-print").addEventListener("click", function () {
         if (!$("invoice-print").disabled && detail.open) window.print();
       });
+      var notifyBtn = $("detail-notify");
+      if (notifyBtn) {
+        notifyBtn.addEventListener("click", function () {
+          if (currentDetailPayment) watchPaymentForNotification(currentDetailPayment);
+        });
+      }
       $("detail-close").addEventListener("click", closeDetail);
       $("detail").addEventListener("click", dismissOnBackdrop);
       $("detail").addEventListener("keydown", trapDetailFocus);
@@ -1719,15 +1857,10 @@ import { sortPayments } from "./sort.js";
     });
 
     window.setInterval(function () {
-      if (store.get().key) pollHealth();
+      if (store.get().key) { pollHealth(); checkDeployedVersion(); }
     }, 30000);
 
-    window.setInterval(function () {
-      var stateSnap = store.get();
-      if (stateSnap.key && stateSnap.autoRefresh && (!stateSnap.status || stateSnap.status === "pending")) {
-        reload();
-      }
-    }, 15000);
+    restartAutoRefreshTimer();
 
     initCreatePaymentDialog();
 

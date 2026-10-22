@@ -156,6 +156,13 @@
           <input id="settings-auto-refresh" type="checkbox" />
           <span>Auto-refresh</span>
         </label>
+        <label for="settings-refresh-interval">Auto-refresh interval</label>
+        <select id="settings-refresh-interval">
+          <option value="10">10s</option>
+          <option value="30">30s</option>
+          <option value="60">60s</option>
+          <option value="300">5m</option>
+        </select>
         <label for="settings-theme">Theme</label>
         <select id="settings-theme">
           <option value="system">System</option>
@@ -208,11 +215,16 @@
     <!-- Main application. -->
     <div id="app" hidden>
       <a class="skip-link" href="#payments" data-i18n="nav.skip">Skip to payments</a>
+      <p id="version-banner" class="version-banner" role="status" hidden>
+        New version available — reload
+        <button type="button" id="version-reload">Reload</button>
+      </p>
       <header class="topbar">
         <div class="brand">
           <span class="star">&#9733;</span>
           <strong>StellarGate</strong>
           <span class="muted small" id="version"></span>
+          <span id="network-badge" class="pill pill-warn" hidden>TESTNET</span>
         </div>
         <div class="topbar-right">
           <span id="session-expiry" class="muted small"></span>
@@ -307,6 +319,7 @@
           <span id="selection-count" class="muted small" hidden></span>
           <button id="export-selected" class="ghost" hidden>Export selected</button>
           <button id="refresh" class="ghost" data-i18n="list.refresh">Refresh</button>
+          <span id="last-updated" class="muted small"></span>
           <button id="new-payment-btn" class="primary" aria-haspopup="dialog">New payment</button>
           <!-- Column visibility menu. The button is the popover anchor; the
                menu itself is a plain list of checkboxes so it degrades to a
@@ -485,6 +498,7 @@
           <button id="detail-close" class="ghost" aria-label="Close">&times;</button>
         </div>
         <button id="invoice-print" type="button" class="primary" disabled>Print invoice</button>
+        <button id="detail-notify" type="button" class="ghost" hidden>Notify me when this completes</button>
           <section id="payment-invoice" aria-label="Payment invoice" hidden>
             <h2>Payment invoice</h2>
             <dl id="invoice-fields" class="fields"></dl>
