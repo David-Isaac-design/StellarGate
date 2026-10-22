@@ -164,6 +164,104 @@ html[data-theme="dark"] {
   box-shadow: inset 0 0 0 2px var(--focus);
 }
 
+/* ── Forced colours (#822) ──────────────────────────────────────────────────
+ *
+ * Windows High Contrast and other `forced-colors` modes discard author colours
+ * and paint with system keywords. Pills, chips and focus rings that relied on
+ * a background tint or a themed outline vanish. These rules restate the
+ * boundaries with system colours so every control keeps an edge and every
+ * focus indicator stays visible.
+ *
+ * `forced-color-adjust: auto` is the default; it is stated explicitly on the
+ * elements whose author colours must be dropped so the intent is documented.
+ * The focus ring keeps its 2px offset invariant — only the colour changes. */
+@media (forced-colors: active) {
+  .pill,
+  .chip,
+  .preset,
+  .summary-card,
+  .card,
+  .delivery,
+  .column-menu,
+  .help-panel,
+  dialog {
+    border: 1px solid CanvasText;
+    forced-color-adjust: auto;
+  }
+
+  /* A selected chip/preset is distinguished by its border weight as well as
+     its fill, since the fill collapses to the system highlight. */
+  .chip-on,
+  .preset-on {
+    border: 2px solid Highlight;
+    background: Highlight;
+    color: HighlightText;
+  }
+
+  /* The pill glyph is the shape cue; keep it in the text colour so it survives
+     the loss of the tinted background. */
+  .pill-icon {
+    color: CanvasText;
+  }
+
+  .webhook-dot {
+    background: CanvasText;
+    border: 1px solid CanvasText;
+  }
+
+  /* Focus rings: keep the offset, swap the colour to the system highlight so
+     the ring is visible against whatever the forced palette paints. */
+  :focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+
+  .payments tbody tr:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 2px Highlight;
+  }
+
+  .search input:focus-visible,
+  .payments tbody tr:focus-visible,
+  .row-active {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+
+  /* Links and buttons keep a visible boundary and readable text. */
+  a {
+    color: LinkText;
+  }
+  button,
+  .primary,
+  .ghost {
+    border: 1px solid ButtonText;
+    color: ButtonText;
+    background: Canvas;
+  }
+  .primary {
+    border-width: 2px;
+  }
+
+  /* Form controls keep their edge. */
+  :where(input:not([type="checkbox"]), select),
+  #settings-form select,
+  #settings-form input[type="text"],
+  #payment-form input[type="text"],
+  #payment-form input[type="url"] {
+    border: 1px solid ButtonText;
+    background: Canvas;
+    color: CanvasText;
+  }
+
+  /* The sticky header must stay opaque in a system colour so rows do not show
+     through it. */
+  .payments thead th {
+    background: Canvas;
+    border-bottom: 1px solid CanvasText;
+  }
+}
+
 * {
   box-sizing: border-box;
 }
@@ -405,6 +503,7 @@ button:disabled {
 
 .topbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
@@ -414,12 +513,15 @@ button:disabled {
   position: sticky;
   top: 0;
   z-index: 3;
+  min-width: 0;
 }
 
 .brand {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .star {
   color: var(--accent);
@@ -427,8 +529,10 @@ button:disabled {
 
 .topbar-right {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.75rem;
+  min-width: 0;
 }
 
 main {
@@ -437,6 +541,9 @@ main {
   padding: 1.25rem;
 }
 
+/* #823: the toolbar wraps rather than clipping at 200% zoom and 320px. Flex
+   children get `min-width: 0` so a long control can shrink instead of forcing
+   horizontal scroll. */
 .toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -444,21 +551,30 @@ main {
   justify-content: space-between;
   gap: 0.75rem;
   margin-bottom: 1rem;
+  min-width: 0;
+}
+.toolbar > * {
+  min-width: 0;
 }
 
 .filters {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
+  min-width: 0;
 }
 
 .search {
   display: flex;
   align-items: center;
   gap: 0.4rem;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 .search input {
-  min-width: 220px;
+  min-width: 0;
+  flex: 1 1 12rem;
+  max-width: 100%;
 }
 .search button {
   padding: 0.3rem 0.55rem;
@@ -669,14 +785,41 @@ kbd {
   text-align: center;
 }
 
+/* ── Status pills (#821) ────────────────────────────────────────────────────
+ *
+ * A pill carries a glyph as well as a colour, so the status is legible without
+ * relying on colour alone (WCAG 1.4.1). The glyph is a plain text character
+ * rendered in `currentColor`, so it inherits the audited pill colour in both
+ * themes and needs no extra asset. Each status gets a distinct shape:
+ *   completed → ✓   pending → ●   expired → ✕   idle → ○
+ * The glyph is decorative to assistive tech (the pill text already names the
+ * status); the markup marks it `aria-hidden`. */
 .pill {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   padding: 0.15rem 0.6rem;
   border-radius: 999px;
   font-size: 0.78rem;
   font-weight: 600;
   white-space: nowrap;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
+
+/* The leading glyph. Fixed size and `flex: none` so a long status word wraps
+   under the text rather than shrinking the icon. */
+.pill-icon {
+  flex: none;
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  line-height: 1;
+  font-size: 0.9em;
+  text-align: center;
+  color: currentColor;
+}
+
 .pill-ok {
   color: var(--ok);
   background: var(--ok-bg);
@@ -958,18 +1101,23 @@ kbd {
   justify-content: space-between;
 }
 
+/* #823: `minmax(0, 1fr)` lets the value column shrink below its content width
+   so a long payment ID wraps instead of pushing the drawer wider than the
+   viewport at 200% zoom. */
 .fields {
   margin: 1rem 0 0;
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 0.5rem 1rem;
 }
 .fields dt {
   color: var(--muted);
   font-size: 0.85rem;
+  overflow-wrap: anywhere;
 }
 .fields dd {
   margin: 0;
+  min-width: 0;
   overflow-wrap: anywhere;
 }
 .fields .copy {
@@ -995,10 +1143,16 @@ kbd {
 
 .delivery-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
   margin-bottom: 0.35rem;
+  min-width: 0;
+}
+.delivery-head > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .delivery-meta {
@@ -1193,6 +1347,50 @@ kbd {
   }
   .settings-foot .dialog-actions {
     justify-content: flex-end;
+  }
+}
+
+/* ── 200% zoom / 320px reflow (#823) ────────────────────────────────────────
+ *
+ * WCAG 1.4.4 (resize text) and 1.4.10 (reflow) require content to survive a
+ * 200% zoom and a 320px viewport without horizontal scrolling. The drawer is
+ * pinned to the viewport edge, so at narrow widths it must become a full-width
+ * flow panel rather than a fixed-width column that overlaps the page. */
+@media (max-width: 480px) {
+  .detail {
+    width: 100%;
+    max-width: 100%;
+    border-inline-start: none;
+    padding: 1rem;
+  }
+
+  .topbar {
+    padding: 0.6rem 0.9rem;
+  }
+
+  main {
+    padding: 0.9rem;
+  }
+
+  .summary {
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  }
+
+  /* The card layout already stacks cells; make sure the label/value split
+     wraps rather than clipping the value. */
+  .payments td {
+    flex-wrap: wrap;
+    overflow-wrap: anywhere;
+  }
+  .payments td::before {
+    flex: none;
+  }
+
+  .help {
+    padding: 0.75rem;
+  }
+  .help-row {
+    flex-wrap: wrap;
   }
 }
 

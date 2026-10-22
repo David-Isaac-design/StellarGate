@@ -21,6 +21,28 @@
  * `data-theme="dark"` attribute this file sets. The attribute is therefore the
  * single switch that flips every token, which is why the resolved theme is
  * pinned here rather than left to `prefers-color-scheme` alone.
+ *
+ * Status tokens (issues #821, #822): status pills must not rely on colour
+ * alone. Each status therefore has a matching icon/shape (rendered from CSS
+ * masks in dashboard.css, so no extra markup or network request is needed) and
+ * a per-status icon colour token. The token set is identical in the light and
+ * dark palettes — only the values differ — so the same markup renders in both:
+ *
+ *   --status-ok-fg / --status-ok-icon
+ *   --status-warn-fg / --status-warn-icon
+ *   --status-error-fg / --status-error-icon
+ *   --status-info-fg / --status-info-icon
+ *   --status-neutral-fg / --status-neutral-icon
+ *
+ * The icon tokens are chosen to stay distinguishable under the common forms of
+ * colour blindness (deuteranopia, protanopia, tritanopia) because the shape,
+ * not the hue, carries the meaning. In `forced-colors: active` (Windows High
+ * Contrast and equivalents) dashboard.css overrides these with system colours
+ * (`CanvasText`, `Highlight`, `LinkText`, ...) and keeps focus rings visible
+ * via `outline-color: Highlight`, so nothing here needs to detect that mode.
+ *
+ * None of these tokens are read or written by this file; they are documented
+ * here only so the token set stays discoverable next to the theme switch.
  */
 (function () {
   "use strict";
