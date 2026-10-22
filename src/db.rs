@@ -1650,7 +1650,9 @@ mod tests {
             .await
             .unwrap();
 
-        migrate(&pool).await.unwrap();
+        migrate(&pool)
+            .await
+            .expect("migrations should apply successfully");
 
         assert_eq!(
             find_merchant_by_key(&pool, legacy_key).await.unwrap(),
@@ -1747,12 +1749,12 @@ mod tests {
         // A one-hour TTL lands the expiry strictly in the future...
         let live = create_payment(&pool, new_payment("a", "MEMOA", 3600))
             .await
-            .unwrap();
+            .expect("payment with a positive TTL should be created");
         assert!(live.expires_at > live.created_at);
         // ...while a negative TTL produces an already-overdue expiry.
         let dead = create_payment(&pool, new_payment("b", "MEMOB", -10))
             .await
-            .unwrap();
+            .expect("payment with a negative TTL should be created");
         assert!(dead.expires_at < dead.created_at);
     }
 
@@ -1761,10 +1763,10 @@ mod tests {
         let pool = memory_db().await;
         create_payment(&pool, new_payment("live", "MEMOL", 3600))
             .await
-            .unwrap();
+            .expect("live payment should be created");
         create_payment(&pool, new_payment("dead", "MEMOD", -10))
             .await
-            .unwrap();
+            .expect("overdue payment should be created");
 
         let pending = list_pending(&pool).await.unwrap();
         let ids: Vec<&str> = pending.iter().map(|p| p.id.as_str()).collect();
@@ -1776,10 +1778,10 @@ mod tests {
         let pool = memory_db().await;
         create_payment(&pool, new_payment("partial", "MEMOP", 3600))
             .await
-            .unwrap();
+            .expect("payment should be created");
         update_payment_status(&pool, "partial", "underpaid", "TX1", "3")
             .await
-            .unwrap();
+            .expect("payment should transition to underpaid");
 
         let found = find_pending_by_memo(&pool, "MEMOP").await.unwrap().unwrap();
         assert_eq!(found.id, "partial");
