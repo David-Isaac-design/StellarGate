@@ -502,6 +502,7 @@ import { sortPayments } from "./sort.js";
       setError($("gate-error"), null);
       updateSessionExpiry();
       loadVersion();
+      loadNetworkBadge();
       pollHealth();
       loadSummary();
       reload();
@@ -1423,6 +1424,17 @@ import { sortPayments } from "./sort.js";
         loadedVersion = version;
         var node = $("version");
         if (node) node.textContent = version;
+      })
+      .catch(function () { /* cosmetic only */ });
+  }
+
+  /** Show the testnet badge when the gateway isn't on the public network (#812). */
+  function loadNetworkBadge() {
+    fetch("/network")
+      .then(function (res) { return res.json(); })
+      .then(function (body) {
+        var badge = $("network-badge");
+        if (badge) badge.hidden = body.network === "public";
       })
       .catch(function () { /* cosmetic only */ });
   }
