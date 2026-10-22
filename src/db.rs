@@ -1628,7 +1628,7 @@ mod tests {
         let pool = SqlitePoolOptions::new()
             .connect("sqlite::memory:")
             .await
-            .unwrap();
+            .expect("in-memory SQLite pool should connect");
 
         // The schema as it existed before api_keys.
         sqlx::query(
@@ -1640,7 +1640,7 @@ mod tests {
         )
         .execute(&pool)
         .await
-        .unwrap();
+        .expect("creating the legacy merchants table should succeed");
 
         let legacy_key = "3f1c9a7e-0b2d-4e5f-8a6b-7c8d9e0f1a2b"; // an old UUID key
         sqlx::query("INSERT INTO merchants (id, api_key_hash) VALUES (?, ?)")
@@ -1648,7 +1648,7 @@ mod tests {
             .bind(hash_api_key(legacy_key))
             .execute(&pool)
             .await
-            .unwrap();
+            .expect("inserting the legacy merchant row should succeed");
 
         migrate(&pool)
             .await
@@ -1953,12 +1953,12 @@ mod tests {
         let pool = memory_db().await;
         create_payment(&pool, new_payment("legacy", "MEMOLEG", 3600))
             .await
-            .unwrap();
+            .expect("create_payment should succeed");
         // Simulate a pre-#119 underpaid intent: only the latest tx_hash and the
         // cumulative paid_amount were persisted.
         update_payment_status(&pool, "legacy", "underpaid", "TX_OLD", "3")
             .await
-            .unwrap();
+            .expect("update_payment_status should succeed");
         // The join table is empty until a backfill runs.
         assert_eq!(sum_processed_stroops(&pool, "legacy").await.unwrap(), 0);
 
@@ -1988,7 +1988,7 @@ mod tests {
             .unwrap();
         save_webhook_delivery(&pool, "fresh", "p1", "http://x", "{}", "payment.completed")
             .await
-            .unwrap();
+            .expect("save_webhook_delivery should succeed");
 
         // Freshly inserted, so a large grace window makes it ineligible...
         assert!(
