@@ -189,6 +189,75 @@ check(
     "date pickers, the <select>, the scrollbar) keep the OS palette",
 );
 
+// ── Status is not conveyed by colour alone (issue #821) ─────────────────────
+
+/* Every status pill must carry a non-colour cue — an icon glyph or a distinct
+ * shape — alongside its text, or a colour-blind user cannot tell them apart. */
+const pillClasses = new Set();
+for (const m of markup.matchAll(/class="[^"]*\bpill\b[^"]*"/g)) {
+  for (const c of m[0].matchAll(/\bpill-([a-z-]+)\b/g)) pillClasses.add(c[1]);
+}
+check(
+  pillClasses.size > 0,
+  "no status pills found in the markup; the colour-blindness guard has nothing " +
+    "to check and would silently pass",
+);
+for (const name of pillClasses) {
+  check(
+    new RegExp(`\\.pill-${name}\\b[^{]*::before`).test(style) ||
+      new RegExp(`\\.pill-${name}\\b[^{]*\\bborder-radius`).test(style),
+    `status pill .pill-${name} is distinguished by colour alone — give it a ` +
+      "::before icon/shape or a distinct border-radius so it survives a " +
+      "colour-blindness simulator",
+  );
+}
+check(
+  /\.pill\b[^{]*::before/.test(style) ||
+    /\.pill\b[^{]*\bborder-radius/.test(style),
+  "the base .pill rule needs a shape/icon cue shared by every status",
+);
+
+// ── Windows High Contrast / forced-colors (issue #822) ──────────────────────
+
+check(
+  /@media\s*\(\s*forced-colors:\s*active\s*\)/.test(style),
+  "the stylesheet needs an @media (forced-colors: active) block, or pills, " +
+    "chips and focus rings vanish in Windows High Contrast mode",
+);
+const forcedBlock = style.match(
+  /@media\s*\(\s*forced-colors:\s*active\s*\)\s*\{([\s\S]*?)\n\}/,
+);
+check(
+  !!forcedBlock,
+  "the forced-colors block could not be read; keep it a top-level block so the " +
+    "system-colour and focus checks below can inspect it",
+);
+if (forcedBlock) {
+  const body = forcedBlock[1];
+  check(
+    /(?:Canvas|CanvasText|LinkText|Highlight|HighlightText|ButtonText|ButtonFace|GrayText|Field|FieldText|SelectedItem|SelectedItemText|Mark|MarkText|VisitedText|ActiveText)\b/.test(
+      body,
+    ),
+    "the forced-colors block must use CSS system colour keywords (Canvas, " +
+      "CanvasText, Highlight, …) rather than hard-coded colours",
+  );
+  check(
+    /:focus(?:-visible)?\b/.test(body) && /outline/.test(body),
+    "the forced-colors block must keep focus indicators visible — set an " +
+      "outline on :focus/:focus-visible using a system colour",
+  );
+  check(
+    /\.pill\b/.test(body) || /\.chip\b/.test(body),
+    "the forced-colors block must restyle the pills/chips, which otherwise lose " +
+      "their background and border in High Contrast mode",
+  );
+}
+check(
+  /:focus-visible\b[^{]*\{[^}]*outline/.test(style),
+  "focus rings must be drawn with outline on :focus-visible so they survive " +
+    "forced-colors mode",
+);
+
 /* ── The search box (#693, focused by `/` in #721) ─────────────────────── */
 
 if (!/<label[^>]+for="search"/.test(html)) {

@@ -1697,7 +1697,9 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            find_merchant_by_key(&pool, &raw).await.unwrap(),
+            find_merchant_by_key(&pool, &raw)
+                .await
+                .expect("merchant lookup by raw key should succeed"),
             Some("m1".to_string())
         );
 

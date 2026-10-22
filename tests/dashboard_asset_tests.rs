@@ -1148,3 +1148,116 @@ fn issue_765_prints_invoice_without_dashboard_chrome() {
     assert!(DASHBOARD_CSS.contains("#detail > :not(#payment-invoice)"));
     assert!(DASHBOARD_CSS.contains("@media print"));
 }
+
+/// Status must not be conveyed by colour alone (#821).
+///
+/// Each pill carries a distinct glyph alongside its text, so the status is
+/// still readable in greyscale, under a colour-blindness simulator, and to a
+/// screen reader that never sees the background colour at all.
+#[test]
+fn status_pills_carry_a_non_colour_cue() {
+    // One glyph per status, defined once in the stylesheet.
+    for status in ["succeeded", "pending", "failed", "expired"] {
+        assert!(
+            DASHBOARD_CSS.contains(&format!(".pill.{status}::before")),
+            "the {status} pill needs a ::before glyph, or its status is carried \
+             by colour alone (#821)"
+        );
+    }
+    // The glyphs must actually differ, not be the same dot recoloured.
+    let glyphs: Vec<&str> = ["succeeded", "pending", "failed", "expired"]
+        .iter()
+        .filter_map(|status| {
+            let start = DASHBOARD_CSS.find(&format!(".pill.{status}::before"))?;
+            let block = &DASHBOARD_CSS[start..];
+            let block = &block[..block.find('}')?];
+            block
+                .split_once("content:")
+                .map(|(_, rest)| rest.trim().trim_end_matches(';').trim())
+        })
+        .collect();
+    assert_eq!(glyphs.len(), 4, "every status pill needs a content glyph");
+    let mut unique = glyphs.clone();
+    unique.sort_unstable();
+    unique.dedup();
+    assert_eq!(
+        unique.len(),
+        glyphs.len(),
+        "each status needs a distinct glyph, not one shape recoloured: {glyphs:?}"
+    );
+    // The glyph is decorative; the text already names the status.
+    assert!(
+        DASHBOARD_CSS.contains("aria-hidden") || DASHBOARD_HTML.contains("aria-hidden"),
+        "a purely decorative glyph must be hidden from assistive technology"
+    );
+}
+
+/// Windows High Contrast / `forced-colors` must keep pills, chips and focus
+/// rings visible (#822).
+///
+/// In forced-colors mode the user agent overrides author colours, so anything
+/// distinguished only by a background colour disappears. The rules below
+/// re-draw those boundaries with system colour keywords, which the UA maps to
+/// the user's chosen palette.
+#[test]
+fn forced_colors_mode_uses_system_colours() {
+    assert!(
+        DASHBOARD_CSS.contains("@media (forced-colors: active)"),
+        "the dashboard needs a forced-colors block, or pills, chips and focus \
+         rings vanish in Windows High Contrast (#822)"
+    );
+    let start = DASHBOARD_CSS
+        .find("@media (forced-colors: active)")
+        .expect("forced-colors block");
+    let block = &DASHBOARD_CSS[start..];
+    let block = &block[..block.find("\n}").map(|i| i + 2).unwrap_or(block.len())];
+    for keyword in ["CanvasText", "Canvas", "Highlight", "ButtonText"] {
+        assert!(
+            block.contains(keyword),
+            "the forced-colors block must use the system colour {keyword}, or it \
+             is still relying on an author colour the UA has overridden"
+        );
+    }
+    // Focus must stay visible: the ring is redrawn in a system colour.
+    assert!(
+        block.contains("outline") && block.contains("Highlight"),
+        "focus indicators must be redrawn with a system colour in forced-colors \
+         mode, or keyboard users lose the ring entirely (#822)"
+    );
+    // Pills and chips need a real border, since their fill is overridden.
+    assert!(
+        block.contains(".pill") && block.contains("border"),
+        "pills must gain a border in forced-colors mode; their background fill \
+         is overridden and nothing else marks the boundary"
+    );
+}
+
+/// The layout must survive 200% text zoom and a 320px viewport (#823).
+///
+/// WCAG 1.4.4 and 1.4.10 require content to reflow without horizontal
+/// scrolling. The toolbar wraps and the table scrolls inside its own container
+/// rather than pushing the page wide.
+#[test]
+fn layout_reflows_at_320px_and_200_percent_zoom() {
+    assert!(
+        DASHBOARD_CSS.contains("flex-wrap: wrap"),
+        "the toolbar must wrap, or its controls are clipped at 320px (#823)"
+    );
+    assert!(
+        DASHBOARD_CSS.contains("overflow-x: auto"),
+        "the payments table must scroll inside its own container rather than \
+         widening the page at 320px (#823)"
+    );
+    assert!(
+        DASHBOARD_CSS.contains("@media (max-width: 480px)")
+            || DASHBOARD_CSS.contains("@media (max-width: 40rem)"),
+        "a narrow-viewport block must exist to stack the toolbar and drawer \
+         content at 320px (#823)"
+    );
+    // Nothing may pin a fixed width wider than the smallest supported viewport.
+    assert!(
+        !DASHBOARD_CSS.contains("min-width: 360px"),
+        "a min-width above 320px forces horizontal scrolling at the smallest \
+         supported viewport (#823)"
+    );
+}

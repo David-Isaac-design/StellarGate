@@ -391,6 +391,166 @@ test.describe("dashboard smoke", () => {
     });
   }
 
+  /* Issue #821: status must not be conveyed by colour alone. Every status pill
+     carries a text label and a non-colour cue (an icon or a distinct shape),
+     so a colour-blind operator can still tell completed from pending. */
+  test("status pills carry a non-colour cue alongside the text", async ({
+    page,
+    seedData,
+  }) => {
+    const leaks = watchForKeyLeaks(page, seedData.apiKey);
+
+    await page.goto("/dashboard");
+    await page.getByLabel("API key").fill(seedData.apiKey);
+    await page.getByRole("button", { name: "Sign in" }).click();
+    await expect(page.locator("#rows tr")).toHaveCount(4);
+
+    const pills = page.locator("#rows [data-status]");
+    const count = await pills.count();
+    expect(count, "every row must render a status pill").toBeGreaterThan(0);
+
+    for (let i = 0; i < count; i += 1) {
+      const pill = pills.nth(i);
+      const status = await pill.getAttribute("data-status");
+      expect(status, "a pill must name its status").toBeTruthy();
+
+      // The status is written out, not implied by colour.
+      await expect(pill).toContainText(status);
+
+      // And there is a shape or icon cue: either a decorative glyph element
+      // or a non-rectangular border-radius. One of the two must hold.
+      const cue = await pill.evaluate((el) => {
+        const glyph = el.querySelector(
+          "[aria-hidden='true'], svg, .pill-icon, .status-icon",
+        );
+        const radius = getComputedStyle(el).borderRadius;
+        const shaped = radius !== "0px" && radius !== "";
+        return { hasGlyph: Boolean(glyph), shaped };
+      });
+      expect(
+        cue.hasGlyph || cue.shaped,
+        `status pill "${status}" needs an icon or shape cue, not colour alone`,
+      ).toBe(true);
+    }
+
+    leaks.assertClean();
+  });
+
+  /* Issue #822: in Windows High Contrast / `forced-colors` mode the pills,
+     chips and focus rings must stay visible using system colours. */
+  test("pills, chips and focus rings survive forced-colors", async ({
+    page,
+    seedData,
+  }) => {
+    const leaks = watchForKeyLeaks(page, seedData.apiKey);
+
+    await page.emulateMedia({ forcedColors: "active" });
+    await page.goto("/dashboard");
+    await page.getByLabel("API key").fill(seedData.apiKey);
+    await page.getByRole("button", { name: "Sign in" }).click();
+    await expect(page.locator("#rows tr")).toHaveCount(4);
+
+    // The pill must still be painted with a visible border or background.
+    const pill = page.locator("#rows [data-status]").first();
+    await expect(pill).toBeVisible();
+    const pillStyle = await pill.evaluate((el) => {
+      const s = getComputedStyle(el);
+      return { border: s.borderTopWidth, bg: s.backgroundColor, color: s.color };
+    });
+    expect(
+      pillStyle.border !== "0px" || pillStyle.bg !== "rgba(0, 0, 0, 0)",
+      "a status pill must keep a visible border or fill in forced-colors",
+    ).toBe(true);
+
+    // A filter chip must remain visible too.
+    const chip = page.getByRole("button", { name: "Completed", exact: true });
+    await expect(chip).toBeVisible();
+
+    // Keyboard focus must produce a visible ring, not a transparent outline.
+    await chip.focus();
+    const ring = await chip.evaluate((el) => {
+      const s = getComputedStyle(el);
+      return {
+        outlineWidth: s.outlineWidth,
+        outlineStyle: s.outlineStyle,
+        outlineColor: s.outlineColor,
+        boxShadow: s.boxShadow,
+      };
+    });
+    const hasOutline =
+      ring.outlineStyle !== "none" &&
+      ring.outlineWidth !== "0px" &&
+      ring.outlineColor !== "rgba(0, 0, 0, 0)";
+    const hasShadow = ring.boxShadow !== "none" && ring.boxShadow !== "";
+    expect(
+      hasOutline || hasShadow,
+      "a focused chip must keep a visible focus indicator in forced-colors",
+    ).toBe(true);
+
+    leaks.assertClean();
+  });
+
+  /* Issue #823: WCAG 1.4.4 and 1.4.10 — content must survive 200% zoom and a
+     320px viewport without horizontal scrolling, and toolbar controls must not
+     be clipped. */
+  for (const scenario of [
+    { name: "320px viewport", width: 320, height: 640, zoom: 1 },
+    { name: "200% zoom", width: 1280, height: 800, zoom: 2 },
+  ]) {
+    test(`no horizontal scroll and no clipped toolbar — ${scenario.name}`, async ({
+      page,
+      seedData,
+    }) => {
+      const leaks = watchForKeyLeaks(page, seedData.apiKey);
+
+      await page.setViewportSize({
+        width: scenario.width,
+        height: scenario.height,
+      });
+      await page.goto("/dashboard");
+      if (scenario.zoom !== 1) {
+        // Emulate 200% text zoom by scaling the root font size.
+        await page.evaluate((z) => {
+          document.documentElement.style.fontSize = `${16 * z}px`;
+        }, scenario.zoom);
+      }
+
+      await page.getByLabel("API key").fill(seedData.apiKey);
+      await page.getByRole("button", { name: "Sign in" }).click();
+      await expect(page.locator("#rows tr").first()).toBeVisible();
+
+      // The document must not scroll horizontally.
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - window.innerWidth,
+      );
+      expect(
+        overflow,
+        `content must reflow without horizontal scrolling (overflow ${overflow}px)`,
+      ).toBeLessThanOrEqual(1);
+
+      // Toolbar controls must be fully inside the viewport, not clipped.
+      const toolbar = page.locator("#toolbar, .toolbar").first();
+      if (await toolbar.count()) {
+        const buttons = toolbar.getByRole("button");
+        const n = await buttons.count();
+        for (let i = 0; i < n; i += 1) {
+          const box = await buttons.nth(i).boundingBox();
+          if (!box) continue;
+          expect(
+            box.x,
+            `toolbar control ${i} must not be clipped on the left`,
+          ).toBeGreaterThanOrEqual(-1);
+          expect(
+            box.x + box.width,
+            `toolbar control ${i} must not be clipped on the right`,
+          ).toBeLessThanOrEqual(scenario.width + 1);
+        }
+      }
+
+      leaks.assertClean();
+    });
+  }
+
   /* Issue #774: on a long list the header must stay pinned inside the card so
      the column labels remain readable while scrolling. */
   test("the table header stays sticky on a long list", async ({

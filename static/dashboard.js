@@ -760,6 +760,38 @@ import { sortPayments } from "./sort.js";
     return td;
   }
 
+  /**
+   * Non-colour status indicator (#821).
+   *
+   * Each status gets a distinct glyph so the pill is not distinguished by
+   * colour alone. The glyph is decorative (aria-hidden) because the status
+   * text is always rendered alongside it. Unknown statuses fall back to a
+   * neutral bullet rather than guessing.
+   */
+  function statusGlyph(status) {
+    switch (status) {
+      case "pending":   return "\u25CF"; // ● filled circle
+      case "completed": return "\u2714"; // ✔ check mark
+      case "underpaid": return "\u25B2"; // ▲ up triangle
+      case "expired":   return "\u2716"; // ✖ ballot X
+      case "failed":    return "\u2716"; // ✖ ballot X
+      default:          return "\u25CB"; // ○ hollow circle
+    }
+  }
+
+  /**
+   * Build a status pill: a decorative glyph plus the status text. The text is
+   * set with textContent (never innerHTML) since it originates from the API.
+   */
+  function statusPill(status) {
+    var pill = el("span", pillClass(status));
+    var glyph = el("span", "pill-glyph", statusGlyph(status));
+    glyph.setAttribute("aria-hidden", "true");
+    pill.appendChild(glyph);
+    pill.appendChild(el("span", "pill-text", status));
+    return pill;
+  }
+
   function rowFor(p, isActive) {
     var tr = document.createElement("tr");
     tr.tabIndex = 0;
@@ -790,7 +822,7 @@ import { sortPayments } from "./sort.js";
     var statusCell = document.createElement("td");
     statusCell.setAttribute("data-label", "Status");
     statusCell.setAttribute("data-column", "status");
-    statusCell.appendChild(el("span", pillClass(p.status), p.status));
+    statusCell.appendChild(statusPill(p.status));
     tr.appendChild(statusCell);
 
     var amountCell = labelledCell("Amount", null, formatAmount(p.amount, p.asset));
@@ -841,10 +873,20 @@ import { sortPayments } from "./sort.js";
    */
   function webhookBadge(p) {
     var status = p && p.webhook_status;
-    if (status === "delivered") return el("span", "pill pill-ok", "delivered");
-    if (status === "failing") return el("span", "pill pill-err", "failing");
-    if (status === "none") return el("span", "pill", "none");
+    if (status === "delivered") return badgeWithGlyph("pill pill-ok", "\u2714", "delivered");
+    if (status === "failing") return badgeWithGlyph("pill pill-err", "\u2716", "failing");
+    if (status === "none") return badgeWithGlyph("pill", "\u25CB", "none");
     return el("span", "muted", "\u2014");
+  }
+
+  /** A pill with a decorative glyph and text, for non-colour distinction (#821). */
+  function badgeWithGlyph(className, glyphChar, text) {
+    var pill = el("span", className);
+    var glyph = el("span", "pill-glyph", glyphChar);
+    glyph.setAttribute("aria-hidden", "true");
+    pill.appendChild(glyph);
+    pill.appendChild(el("span", "pill-text", text));
+    return pill;
   }
 
   // ── Detail panel (#715) ───────────────────────────────────────────────────
@@ -858,6 +900,9 @@ import { sortPayments } from "./sort.js";
     state.detailTrigger = trigger || null;
 
     var detail = $("detail");
+    /* Reflow (#823): the drawer is full-width on narrow viewports and at high
+       zoom, so it must be scrollable rather than clipped. */
+    if (detail) detail.classList.add("detail-open");
     var fields = $("detail-fields");
     clear(fields);
     clear($("deliveries"));
@@ -896,7 +941,7 @@ import { sortPayments } from "./sort.js";
           fields.appendChild(el("dt", null, pair[0]));
           if (pair[2]) {
             var dd = document.createElement("dd");
-            dd.appendChild(el("span", pillClass(p.status), p.status));
+            dd.appendChild(statusPill(p.status));
             fields.appendChild(dd);
           } else if (pair[0] === t("field.transaction") && p.tx_hash) {
             var tx = document.createElement("dd");
@@ -1001,6 +1046,8 @@ import { sortPayments } from "./sort.js";
    */
   function onDetailClosed() {
     store.update({ selectedPaymentId: null });
+    var detail = $("detail");
+    if (detail) detail.classList.remove("detail-open");
     var trigger = state.detailTrigger;
     state.detailTrigger = null;
     if (trigger && trigger.isConnected) {
@@ -1071,7 +1118,7 @@ import { sortPayments } from "./sort.js";
     var li = el("li", "delivery");
     var head = el("div", "delivery-head");
     head.appendChild(el("strong", null, d.event || "webhook"));
-    head.appendChild(el("span", pillClass(d.status), d.status));
+    head.appendChild(statusPill(d.status));
     li.appendChild(head);
     li.appendChild(el("div", "mono", d.url));
     li.appendChild(el("div", "delivery-meta", "attempt " + d.attempts + " · manual " + (d.manual_attempts || 0)));
@@ -1383,14 +1430,24 @@ import { sortPayments } from "./sort.js";
       })
       .then(function (r) {
         var pill = $("health");
+        if (!pill) return;
         pill.className = r.ok ? "pill pill-ok" : "pill pill-err";
-        pill.textContent = r.ok ? "healthy" : r.body.reason || "unavailable";
+        clear(pill);
+        var glyph = el("span", "pill-glyph", r.ok ? "\u2714" : "\u2716");
+        glyph.setAttribute("aria-hidden", "true");
+        pill.appendChild(glyph);
+        pill.appendChild(el("span", "pill-text", r.ok ? "healthy" : r.body.reason || "unavailable"));
         pill.title = JSON.stringify(r.body);
       })
       .catch(function () {
         var pill = $("health");
+        if (!pill) return;
         pill.className = "pill pill-err";
-        pill.textContent = "unreachable";
+        clear(pill);
+        var glyph = el("span", "pill-glyph", "\u2716");
+        glyph.setAttribute("aria-hidden", "true");
+        pill.appendChild(glyph);
+        pill.appendChild(el("span", "pill-text", "unreachable"));
         pill.title = "Readiness request failed";
       });
   }

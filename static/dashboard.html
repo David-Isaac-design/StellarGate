@@ -5,6 +5,74 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>StellarGate Dashboard</title>
     <link rel="stylesheet" href="/dashboard/app.css" />
+    <!-- Status pills carry a shape glyph as well as colour (#821). The glyph
+         is an inline <svg> referencing the sprite at the end of <body>; it is
+         aria-hidden so the pill text remains the accessible name. The rules
+         live here rather than in app.css so the cue is guaranteed present even
+         if the stylesheet fails to load: the glyph still renders at its
+         intrinsic size next to the text. -->
+    <style>
+      .status-sprite {
+        position: absolute;
+        width: 0;
+        height: 0;
+        overflow: hidden;
+      }
+      .pill,
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35em;
+      }
+      .status-glyph {
+        width: 1em;
+        height: 1em;
+        flex: none;
+        vertical-align: -0.125em;
+      }
+      /* Shape carries the meaning; colour is a redundant reinforcement. */
+      .pill-pending .status-glyph,
+      .chip[data-status="pending"] .status-glyph {
+        color: currentColor;
+      }
+      .pill-completed .status-glyph,
+      .chip[data-status="completed"] .status-glyph {
+        color: currentColor;
+      }
+      .pill-underpaid .status-glyph,
+      .chip[data-status="underpaid"] .status-glyph {
+        color: currentColor;
+      }
+      .pill-expired .status-glyph,
+      .chip[data-status="expired"] .status-glyph {
+        color: currentColor;
+      }
+      .pill-idle .status-glyph {
+        color: currentColor;
+      }
+      /* Underpaid is a warning: give its glyph a filled backing so the
+         triangle reads as a distinct silhouette even in greyscale. */
+      .pill-underpaid .status-glyph,
+      .chip[data-status="underpaid"] .status-glyph {
+        background: currentColor;
+        border-radius: 50%;
+        padding: 0.1em;
+        box-sizing: content-box;
+      }
+      .pill-underpaid .status-glyph path,
+      .pill-underpaid .status-glyph circle,
+      .chip[data-status="underpaid"] .status-glyph path,
+      .chip[data-status="underpaid"] .status-glyph circle {
+        stroke: var(--bg, #fff);
+        fill: var(--bg, #fff);
+      }
+      @media (forced-colors: active) {
+        .status-glyph {
+          forced-color-adjust: none;
+          color: CanvasText;
+        }
+      }
+    </style>
     <!-- Applies the stored theme preference before the first paint. Must be a
          classic script in <head>: a module is deferred, so it would run after
          the page has already painted in the OS palette and flash. A separate
@@ -150,7 +218,8 @@
           <span id="session-expiry" class="muted small"></span>
           <span id="health" class="pill pill-idle" title="Gateway health"
             data-i18n="health.checking" data-i18n-title="health.title">
-            checking&hellip;
+            <svg class="status-glyph" aria-hidden="true" focusable="false"><use href="#status-glyph-idle" /></svg>
+            <span class="pill-text">checking&hellip;</span>
           </span>
           <label class="visually-hidden" for="language" data-i18n="nav.language">Language</label>
           <select id="language" class="ghost" data-i18n-title="nav.language"></select>
@@ -197,10 +266,22 @@
           <div class="filters" role="group" aria-label="Filter by status"
             data-i18n-aria-label="filter.label">
             <button class="chip chip-on" data-status="" data-label="All" aria-pressed="true" data-i18n="filter.all">All</button>
-            <button class="chip" data-status="pending" data-label="Pending" aria-pressed="false" data-i18n="filter.pending">Pending</button>
-            <button class="chip" data-status="completed" data-label="Completed" aria-pressed="false" data-i18n="filter.completed">Completed</button>
-            <button class="chip" data-status="underpaid" data-label="Underpaid" aria-pressed="false" data-i18n="filter.underpaid">Underpaid</button>
-            <button class="chip" data-status="expired" data-label="Expired" aria-pressed="false" data-i18n="filter.expired">Expired</button>
+            <button class="chip" data-status="pending" data-label="Pending" aria-pressed="false" data-i18n="filter.pending">
+              <svg class="status-glyph" aria-hidden="true" focusable="false"><use href="#status-glyph-pending" /></svg>
+              <span class="pill-text">Pending</span>
+            </button>
+            <button class="chip" data-status="completed" data-label="Completed" aria-pressed="false" data-i18n="filter.completed">
+              <svg class="status-glyph" aria-hidden="true" focusable="false"><use href="#status-glyph-completed" /></svg>
+              <span class="pill-text">Completed</span>
+            </button>
+            <button class="chip" data-status="underpaid" data-label="Underpaid" aria-pressed="false" data-i18n="filter.underpaid">
+              <svg class="status-glyph" aria-hidden="true" focusable="false"><use href="#status-glyph-underpaid" /></svg>
+              <span class="pill-text">Underpaid</span>
+            </button>
+            <button class="chip" data-status="expired" data-label="Expired" aria-pressed="false" data-i18n="filter.expired">
+              <svg class="status-glyph" aria-hidden="true" focusable="false"><use href="#status-glyph-expired" /></svg>
+              <span class="pill-text">Expired</span>
+            </button>
           </div>
           <div class="filters" role="group" aria-label="Filter by creation date">
             <label class="small" for="created-after">From</label>
@@ -543,6 +624,31 @@
         </div>
       </div>
     </dialog>
+
+    <!-- Status glyph sprite (#821). Status pills are distinguished by shape as
+         well as colour, so they remain readable without colour perception.
+         Each <symbol> is referenced from a pill's inline <svg> via <use>; the
+         svg is aria-hidden so the pill text stays the accessible name. -->
+    <svg class="status-sprite" aria-hidden="true" focusable="false" width="0" height="0">
+      <symbol id="status-glyph-pending" viewBox="0 0 16 16">
+        <circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5" />
+        <path d="M8 4.5V8l2.5 1.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+      </symbol>
+      <symbol id="status-glyph-completed" viewBox="0 0 16 16">
+        <path d="M3 8.5l3.5 3.5L13 4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+      </symbol>
+      <symbol id="status-glyph-underpaid" viewBox="0 0 16 16">
+        <path d="M8 2.5L14.5 13.5H1.5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
+        <path d="M8 6.5v3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+        <circle cx="8" cy="11.5" r="0.9" fill="currentColor" />
+      </symbol>
+      <symbol id="status-glyph-expired" viewBox="0 0 16 16">
+        <path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+      </symbol>
+      <symbol id="status-glyph-idle" viewBox="0 0 16 16">
+        <path d="M3.5 8h9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+      </symbol>
+    </svg>
 
     <script src="/dashboard/vendor/qrcode.js"></script>
     <script type="module" src="/dashboard/app.js"></script>

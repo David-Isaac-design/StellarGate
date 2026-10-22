@@ -229,6 +229,72 @@ for (const [theme, tokens] of Object.entries(THEMES)) {
   }
 }
 
+// ── forced-colors (Windows High Contrast) ────────────────────────────────────
+//
+// In forced-colors mode the browser replaces author colours with the user's
+// system palette, so every hex value audited above is discarded. What survives
+// is the *structure*: a pill whose background and text both collapse to
+// `Canvas`/`CanvasText` loses its tint and its boundary, and a focus ring drawn
+// in `--focus` becomes invisible against `Canvas`. The stylesheet therefore has
+// to opt back in with system colour keywords (#822), and this audit fails if
+// those overrides are removed or drift back to hex values.
+//
+// The keywords are not hex, so they cannot go through `contrast()`. Instead the
+// check is structural: the block must exist, and each selector that identifies a
+// pill, chip or focus ring must set at least one system colour keyword.
+{
+  const forced = css.match(/@media\s*\(\s*forced-colors\s*:\s*active\s*\)\s*\{([\s\S]*?)\n\}/);
+  if (!forced) {
+    failures.push(
+      "forced-colors: no `@media (forced-colors: active)` block in static/dashboard.css; " +
+        "pills, chips and focus rings disappear in Windows High Contrast (#822)",
+    );
+  } else {
+    const body = forced[1];
+    // System colour keywords per CSS Color 4 §system-colors. `transparent` is
+    // not one: it is what the browser already substitutes, not an override.
+    const SYSTEM = new RegExp(
+      "\\b(?:Canvas|CanvasText|LinkText|VisitedText|ActiveText|ButtonFace|ButtonText|" +
+        "ButtonBorder|Field|FieldText|Highlight|HighlightText|SelectedItem|" +
+        "SelectedItemText|Mark|MarkText|GrayText|AccentColor|AccentColorText)\\b",
+    );
+    // Each of these must be re-stated inside the block, or the element keeps
+    // whatever the forced palette gives it — which for a tinted pill is
+    // indistinguishable from the card behind it.
+    const REQUIRED = [
+      { selector: ".pill", role: "status pills" },
+      { selector: ".chip", role: "filter chips" },
+      { selector: ":focus-visible", role: "focus rings" },
+    ];
+    for (const { selector, role } of REQUIRED) {
+      const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const rule = body.match(new RegExp(`(?:^|[\\s,}])${escaped}[^{]*\\{([^}]*)\\}`));
+      if (!rule) {
+        failures.push(
+          `forced-colors: no rule for \`${selector}\` (${role}); it keeps the forced ` +
+            `palette and becomes invisible against the surface (#822)`,
+        );
+        continue;
+      }
+      if (!SYSTEM.test(rule[1])) {
+        failures.push(
+          `forced-colors: \`${selector}\` (${role}) sets no system colour keyword; ` +
+            `author hex values are ignored in forced-colors mode, so the override ` +
+            `does nothing (#822)`,
+        );
+      }
+    }
+    // A hex value inside the block is dead code at best and a false sense of
+    // coverage at worst: the browser discards it.
+    if (/#[0-9a-fA-F]{3,6}\b/.test(body)) {
+      failures.push(
+        "forced-colors: the block contains a hex colour; forced-colors mode ignores " +
+          "author colours, so use a system colour keyword instead (#822)",
+      );
+    }
+  }
+}
+
 if (process.argv.includes("--verbose")) {
   for (const r of rows) {
     console.log(
