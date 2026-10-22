@@ -1736,12 +1736,11 @@ Released under the [MIT License](LICENSE).
 <!-- handsoff-issue-301 -->
 - #301: `settle()` awaits webhook delivery inline, so one slow receiver stalls settlement for every other intent
 
-### Admin key management
+### Printable payment invoices
 
-Open `/dashboard/admin` and enter the configured admin provisioning secret,
-then select a merchant ID to list, issue, or revoke keys. The secret stays in
-memory, is sent only in `X-Admin-Secret`, and is cleared on sign-out or page exit.
-Issued keys are shown once; save the key before hiding it or leaving the page.
-The merchant dashboard does not load the admin controller.
+Open a payment in the dashboard and choose **Print invoice** to print or save
+as PDF. Only the invoice fields and SEP-7 QR code appear in the print output;
+filters, navigation, payment metadata and webhook deliveries are omitted.
+The action is enabled only after that payment has loaded.
 
-Static-only browser regression: `cd e2e && npx playwright test --config playwright.admin.config.js`.
+Static-only browser regression: `cd e2e && npx playwright test --config playwright.invoice.config.js`.
