@@ -1696,7 +1696,7 @@ mod tests {
         let (raw2, prefix2) = generate_api_key();
         create_api_key(&pool, "m1", &raw2, &prefix2, None)
             .await
-            .unwrap();
+            .expect("creating a second API key for the merchant should succeed");
 
         assert_eq!(
             find_merchant_by_key(&pool, &raw).await.unwrap(),
@@ -1704,14 +1704,18 @@ mod tests {
         );
 
         assert_eq!(
-            revoke_api_key(&pool, "m1", &key_id).await.unwrap(),
+            revoke_api_key(&pool, "m1", &key_id)
+                .await
+                .expect("revoking an active key should succeed"),
             RevokeKeyOutcome::Revoked
         );
         assert_eq!(find_merchant_by_key(&pool, &raw).await.unwrap(), None);
 
         // Revoking again reports that nothing was revoked.
         assert_eq!(
-            revoke_api_key(&pool, "m1", &key_id).await.unwrap(),
+            revoke_api_key(&pool, "m1", &key_id)
+                .await
+                .expect("revoke_api_key should succeed for an existing key"),
             RevokeKeyOutcome::NotFound
         );
     }
