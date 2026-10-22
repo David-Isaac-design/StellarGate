@@ -1745,5 +1745,5 @@ The action is enabled only after that payment has loaded.
 
 Static-only browser regression: `cd e2e && npx playwright test --config playwright.invoice.config.js`.
 
-<!-- handsoff-issue-565 -->
-- #565: Use a descriptive .expect("...") instead of bare .unwrap() in test: src/config.rs:2039
+<!-- handsoff-issue-566 -->
+- #566: Use a descriptive .expect("...") instead of bare .unwrap() in test: src/api/mod.rs:1455
