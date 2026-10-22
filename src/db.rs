@@ -1628,7 +1628,7 @@ mod tests {
         let pool = SqlitePoolOptions::new()
             .connect("sqlite::memory:")
             .await
-            .unwrap();
+            .expect("in-memory SQLite pool should connect");
 
         // The schema as it existed before api_keys.
         sqlx::query(
@@ -1640,7 +1640,7 @@ mod tests {
         )
         .execute(&pool)
         .await
-        .unwrap();
+        .expect("creating the legacy merchants table should succeed");
 
         let legacy_key = "3f1c9a7e-0b2d-4e5f-8a6b-7c8d9e0f1a2b"; // an old UUID key
         sqlx::query("INSERT INTO merchants (id, api_key_hash) VALUES (?, ?)")
@@ -1648,9 +1648,11 @@ mod tests {
             .bind(hash_api_key(legacy_key))
             .execute(&pool)
             .await
-            .unwrap();
+            .expect("inserting the legacy merchant row should succeed");
 
-        migrate(&pool).await.unwrap();
+        migrate(&pool)
+            .await
+            .expect("migrations should apply successfully");
 
         assert_eq!(
             find_merchant_by_key(&pool, legacy_key).await.unwrap(),
@@ -1751,12 +1753,12 @@ mod tests {
         // A one-hour TTL lands the expiry strictly in the future...
         let live = create_payment(&pool, new_payment("a", "MEMOA", 3600))
             .await
-            .expect("creating a payment with a positive TTL should succeed");
+            .expect("payment with a positive TTL should be created");
         assert!(live.expires_at > live.created_at);
         // ...while a negative TTL produces an already-overdue expiry.
         let dead = create_payment(&pool, new_payment("b", "MEMOB", -10))
             .await
-            .expect("creating a payment with a negative TTL should succeed");
+            .expect("payment with a negative TTL should be created");
         assert!(dead.expires_at < dead.created_at);
     }
 
@@ -1765,10 +1767,10 @@ mod tests {
         let pool = memory_db().await;
         create_payment(&pool, new_payment("live", "MEMOL", 3600))
             .await
-            .unwrap();
+            .expect("live payment should be created");
         create_payment(&pool, new_payment("dead", "MEMOD", -10))
             .await
-            .unwrap();
+            .expect("overdue payment should be created");
 
         let pending = list_pending(&pool).await.unwrap();
         let ids: Vec<&str> = pending.iter().map(|p| p.id.as_str()).collect();
@@ -1780,10 +1782,10 @@ mod tests {
         let pool = memory_db().await;
         create_payment(&pool, new_payment("partial", "MEMOP", 3600))
             .await
-            .unwrap();
+            .expect("payment should be created");
         update_payment_status(&pool, "partial", "underpaid", "TX1", "3")
             .await
-            .unwrap();
+            .expect("payment should transition to underpaid");
 
         let found = find_pending_by_memo(&pool, "MEMOP").await.unwrap().unwrap();
         assert_eq!(found.id, "partial");
@@ -1955,12 +1957,12 @@ mod tests {
         let pool = memory_db().await;
         create_payment(&pool, new_payment("legacy", "MEMOLEG", 3600))
             .await
-            .unwrap();
+            .expect("create_payment should succeed");
         // Simulate a pre-#119 underpaid intent: only the latest tx_hash and the
         // cumulative paid_amount were persisted.
         update_payment_status(&pool, "legacy", "underpaid", "TX_OLD", "3")
             .await
-            .unwrap();
+            .expect("update_payment_status should succeed");
         // The join table is empty until a backfill runs.
         assert_eq!(sum_processed_stroops(&pool, "legacy").await.unwrap(), 0);
 
@@ -1990,7 +1992,7 @@ mod tests {
             .unwrap();
         save_webhook_delivery(&pool, "fresh", "p1", "http://x", "{}", "payment.completed")
             .await
-            .unwrap();
+            .expect("save_webhook_delivery should succeed");
 
         // Freshly inserted, so a large grace window makes it ineligible...
         assert!(
