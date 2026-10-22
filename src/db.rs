@@ -1915,7 +1915,12 @@ mod tests {
                 .await
                 .unwrap()
         );
-        assert_eq!(sum_processed_stroops(&pool, "p").await.unwrap(), 40_000_000);
+        assert_eq!(
+            sum_processed_stroops(&pool, "p")
+                .await
+                .expect("sum_processed_stroops should succeed for intent p"),
+            40_000_000
+        );
 
         // Re-seeing the same transaction + operation index is a no-op — no double credit.
         assert!(
@@ -1923,7 +1928,12 @@ mod tests {
                 .await
                 .unwrap()
         );
-        assert_eq!(sum_processed_stroops(&pool, "p").await.unwrap(), 40_000_000);
+        assert_eq!(
+            sum_processed_stroops(&pool, "p")
+                .await
+                .expect("sum_processed_stroops should succeed for intent p"),
+            40_000_000
+        );
 
         // A distinct transaction adds to the running total.
         assert!(
@@ -1931,7 +1941,12 @@ mod tests {
                 .await
                 .unwrap()
         );
-        assert_eq!(sum_processed_stroops(&pool, "p").await.unwrap(), 70_000_000);
+        assert_eq!(
+            sum_processed_stroops(&pool, "p")
+                .await
+                .expect("sum_processed_stroops should succeed for intent p"),
+            70_000_000
+        );
 
         // Re-seeing an *earlier* transaction after a later one is still a no-op,
         // regardless of order (issue #119).
@@ -1940,7 +1955,12 @@ mod tests {
                 .await
                 .unwrap()
         );
-        assert_eq!(sum_processed_stroops(&pool, "p").await.unwrap(), 70_000_000);
+        assert_eq!(
+            sum_processed_stroops(&pool, "p")
+                .await
+                .expect("sum_processed_stroops should succeed for intent p"),
+            70_000_000
+        );
 
         // A second operation within TX_A (different operation_index) IS a new credit (issue #613).
         assert!(
@@ -1948,10 +1968,20 @@ mod tests {
                 .await
                 .unwrap()
         );
-        assert_eq!(sum_processed_stroops(&pool, "p").await.unwrap(), 90_000_000);
+        assert_eq!(
+            sum_processed_stroops(&pool, "p")
+                .await
+                .expect("sum_processed_stroops should succeed for intent p"),
+            90_000_000
+        );
 
         // Rows are scoped per intent.
-        assert_eq!(sum_processed_stroops(&pool, "other").await.unwrap(), 0);
+        assert_eq!(
+            sum_processed_stroops(&pool, "other")
+                .await
+                .expect("sum_processed_stroops should succeed for intent other"),
+            0
+        );
     }
 
     #[tokio::test]
