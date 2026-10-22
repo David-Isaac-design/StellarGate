@@ -2120,7 +2120,7 @@ mod tests {
         )
         .execute(&pool)
         .await
-        .unwrap();
+        .expect("UPDATE last_attempt to -86401 seconds should succeed");
         assert_eq!(
             list_redrivable_deliveries(&pool, 34, 0, 86_400, 86_400)
                 .await
